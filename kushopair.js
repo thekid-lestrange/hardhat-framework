@@ -11,17 +11,17 @@ function addr(address) {
     return address
 }
 
-const BENTOBOX_MASTER_APPROVAL_TYPEHASH = keccak256(
+const ANTIQUEBOX_MASTER_APPROVAL_TYPEHASH = keccak256(
     ethers.utils.toUtf8Bytes("SetMasterContractApproval(string warning,address user,address masterContract,bool approved,uint256 nonce)")
 )
 
-function getBentoBoxDomainSeparator(address, chainId) {
+function getAntiqueBoxDomainSeparator(address, chainId) {
     return keccak256(
         defaultAbiCoder.encode(
             ["bytes32", "bytes32", "uint256", "address"],
             [
                 keccak256(ethers.utils.toUtf8Bytes("EIP712Domain(string name,uint256 chainId,address verifyingContract)")),
-                keccak256(ethers.utils.toUtf8Bytes("BentoBox V1")),
+                keccak256(ethers.utils.toUtf8Bytes("AntiqueBox V1")),
                 chainId,
                 address,
             ]
@@ -29,13 +29,13 @@ function getBentoBoxDomainSeparator(address, chainId) {
     )
 }
 
-function getBentoBoxApprovalDigest(bentoBox, user, masterContractAddress, approved, nonce, chainId = 1) {
-    const DOMAIN_SEPARATOR = getBentoBoxDomainSeparator(bentoBox.address, chainId)
+function getAntiqueBoxApprovalDigest(antiqueBox, user, masterContractAddress, approved, nonce, chainId = 1) {
+    const DOMAIN_SEPARATOR = getAntiqueBoxDomainSeparator(antiqueBox.address, chainId)
     const msg = defaultAbiCoder.encode(
         ["bytes32", "bytes32", "address", "address", "bool", "uint256"],
         [
-            BENTOBOX_MASTER_APPROVAL_TYPEHASH,
-            keccak256(ethers.utils.toUtf8Bytes(approved ? "Give FULL access to funds in (and approved to) BentoBox?" : "Revoke access to BentoBox?")),
+            ANTIQUEBOX_MASTER_APPROVAL_TYPEHASH,
+            keccak256(ethers.utils.toUtf8Bytes(approved ? "Give FULL access to funds in (and approved to) AntiqueBox?" : "Revoke access to AntiqueBox?")),
             user.address,
             masterContractAddress,
             approved,
@@ -46,8 +46,8 @@ function getBentoBoxApprovalDigest(bentoBox, user, masterContractAddress, approv
     return keccak256(pack)
 }
 
-function getSignedMasterContractApprovalData(bentoBox, user, privateKey, masterContractAddress, approved, nonce) {
-    const digest = getBentoBoxApprovalDigest(bentoBox, user, masterContractAddress, approved, nonce, user.provider._network.chainId)
+function getSignedMasterContractApprovalData(antiqueBox, user, privateKey, masterContractAddress, approved, nonce) {
+    const digest = getAntiqueBoxApprovalDigest(antiqueBox, user, masterContractAddress, approved, nonce, user.provider._network.chainId)
     const { v, r, s } = ecsign(Buffer.from(digest.slice(2), "hex"), Buffer.from(privateKey.replace("0x", ""), "hex"))
     return { v, r, s }
 }
@@ -164,33 +164,33 @@ const ACTION_GET_REPAY_PART = 7;
 // Functions that don't need accrue to be called
 const ACTION_ADD_COLLATERAL = 10;
 
-// Function on BentoBox
-const ACTION_BENTO_DEPOSIT = 20;
-const ACTION_BENTO_WITHDRAW = 21;
-const ACTION_BENTO_TRANSFER = 22;
-const ACTION_BENTO_TRANSFER_MULTIPLE = 23;
-const ACTION_BENTO_SETAPPROVAL = 24;
+// Function on AntiqueBox
+const ACTION_ANTIQUE_DEPOSIT = 20;
+const ACTION_ANTIQUE_WITHDRAW = 21;
+const ACTION_ANTIQUE_TRANSFER = 22;
+const ACTION_ANTIQUE_TRANSFER_MULTIPLE = 23;
+const ACTION_ANTIQUE_SETAPPROVAL = 24;
 
-// Any external call (except to BentoBox)
+// Any external call (except to AntiqueBox)
 const ACTION_CALL = 30;
 
-class KashiPair {
+class KushoPair {
     constructor(contract, helper) {
         this.contract = contract
         this.helper = helper
         this.address = contract.address
     }
 
-    async init(bentoBox) {
-        this.bentoBox = bentoBox
+    async init(antiqueBox) {
+        this.antiqueBox = antiqueBox
         this.asset = new ethers.Contract(await this.contract.asset(), ERC20abi, this.contract.signer)
         this.collateral = new ethers.Contract(await this.contract.collateral(), ERC20abi, this.contract.signer)
         return this
     }
 
     as(from) {
-        let connectedPair = new KashiPair(this.contract.connect(from))
-        connectedPair.bentoBox = this.bentoBox.connect(from)
+        let connectedPair = new KushoPair(this.contract.connect(from))
+        connectedPair.antiqueBox = this.antiqueBox.connect(from)
         connectedPair.helper = this.helper
         connectedPair.asset = this.asset.connect(from)
         connectedPair.collateral = this.collateral.connect(from)
@@ -201,7 +201,7 @@ class KashiPair {
     async run(commandsFunction) {
         const commands = commandsFunction(this.cmd)
         for (let i = 0; i < commands.length; i++) {
-            if (typeof commands[i] == "object" && commands[i].type == "KashiPairCmd") {
+            if (typeof commands[i] == "object" && commands[i].type == "KushoPairCmd") {
                 //console.log("RUN CMD: ", commands[i].method, commands[i].params, commands[i].as ? commands[i].as.address : "")
                 let pair = commands[i].pair
                 if (commands[i].as) {
@@ -210,7 +210,7 @@ class KashiPair {
                 let tx = await pair[commands[i].method](...commands[i].params)
                 let receipt = await tx.wait()
                 //console.log("Gas used: ", receipt.gasUsed.toString());
-            } else if (typeof commands[i] == "object" && commands[i].type == "KashiPairDo") {
+            } else if (typeof commands[i] == "object" && commands[i].type == "KushoPairDo") {
                 //console.log("RUN DO: ", commands[i].method, commands[i].params)
                 await commands[i].method(...commands[i].params)
             } else {
@@ -247,7 +247,7 @@ class KashiPair {
             token,
             {
                 owner: addr(owner),
-                spender: addr(this.bentoBox),
+                spender: addr(this.antiqueBox),
                 value: amount,
             },
             nonce,
@@ -256,8 +256,8 @@ class KashiPair {
         )
         const { v, r, s } = ecsign(Buffer.from(digest.slice(2), "hex"), Buffer.from(owner_key.replace("0x", ""), "hex"))
 
-        //return token.permit(addr(owner), addr(this.bentoBox), amount, deadline, v, r, s);
-        let data = token.interface.encodeFunctionData("permit", [addr(owner), addr(this.bentoBox), amount, deadline, v, r, s])
+        //return token.permit(addr(owner), addr(this.antiqueBox), amount, deadline, v, r, s);
+        let data = token.interface.encodeFunctionData("permit", [addr(owner), addr(this.antiqueBox), amount, deadline, v, r, s])
         return this.contract.cook(
             [ACTION_CALL],
             [0],
@@ -266,16 +266,16 @@ class KashiPair {
     }
 
     approveAsset(amount) {
-        return this.asset.approve(this.bentoBox.address, amount)
+        return this.asset.approve(this.antiqueBox.address, amount)
     }
 
     approveCollateral(amount) {
-        return this.collateral.approve(this.bentoBox.address, amount)
+        return this.collateral.approve(this.antiqueBox.address, amount)
     }
 
     depositCollateral(amount) {
         return this.contract.cook(
-            [ACTION_BENTO_DEPOSIT, ACTION_ADD_COLLATERAL],
+            [ACTION_ANTIQUE_DEPOSIT, ACTION_ADD_COLLATERAL],
             [0, 0],
             [
                 defaultAbiCoder.encode(
@@ -289,7 +289,7 @@ class KashiPair {
 
     withdrawCollateral(share) {
         return this.contract.cook(
-            [ACTION_REMOVE_COLLATERAL, ACTION_BENTO_WITHDRAW],
+            [ACTION_REMOVE_COLLATERAL, ACTION_ANTIQUE_WITHDRAW],
             [0, 0],
             [
                 defaultAbiCoder.encode(["int256", "address"], [share, addr(this.contract.signer)]),
@@ -303,7 +303,7 @@ class KashiPair {
 
     depositAssetWithApproval(amount, masterContract, privateKey, nonce) {
         const { v, r, s } = getSignedMasterContractApprovalData(
-            this.bentoBox,
+            this.antiqueBox,
             this.contract.signer,
             privateKey,
             addr(masterContract),
@@ -311,7 +311,7 @@ class KashiPair {
             nonce
         )
         return this.contract.cook(
-            [ACTION_BENTO_SETAPPROVAL, ACTION_BENTO_DEPOSIT, ACTION_ADD_ASSET],
+            [ACTION_ANTIQUE_SETAPPROVAL, ACTION_ANTIQUE_DEPOSIT, ACTION_ADD_ASSET],
             [0, 0, 0],
             [
                 defaultAbiCoder.encode(
@@ -326,7 +326,7 @@ class KashiPair {
 
     depositAsset(amount) {
         return this.contract.cook(
-            [ACTION_BENTO_DEPOSIT, ACTION_ADD_ASSET],
+            [ACTION_ANTIQUE_DEPOSIT, ACTION_ADD_ASSET],
             [0, 0],
             [
                 defaultAbiCoder.encode(["address", "address", "int256", "int256"], [this.asset.address, addr(this.contract.signer), amount, 0]),
@@ -337,7 +337,7 @@ class KashiPair {
 
     withdrawAsset(fraction) {
         return this.contract.cook(
-            [ACTION_REMOVE_ASSET, ACTION_BENTO_WITHDRAW],
+            [ACTION_REMOVE_ASSET, ACTION_ANTIQUE_WITHDRAW],
             [0, 0],
             [
                 defaultAbiCoder.encode(["int256", "address"], [fraction, addr(this.contract.signer)]),
@@ -348,7 +348,7 @@ class KashiPair {
 
     repay(part) {
         return this.contract.cook(
-            [ACTION_GET_REPAY_SHARE, ACTION_BENTO_DEPOSIT, ACTION_REPAY],
+            [ACTION_GET_REPAY_SHARE, ACTION_ANTIQUE_DEPOSIT, ACTION_REPAY],
             [0, 0, 0],
             [
                 defaultAbiCoder.encode(["int256"], [part]),
@@ -358,13 +358,13 @@ class KashiPair {
         )
     }
 
-    repayFromBento(part) {
+    repayFromAntique(part) {
         return this.contract.repay(addr(this.contract.signer), false, part)
     }
 
     borrow(amount) {
         return this.contract.cook(
-            [ACTION_BORROW, ACTION_BENTO_WITHDRAW],
+            [ACTION_BORROW, ACTION_ANTIQUE_WITHDRAW],
             [0, 0],
             [
                 defaultAbiCoder.encode(["uint256", "address"], [amount, addr(this.contract.signer)]),
@@ -382,7 +382,7 @@ class KashiPair {
             "0",
         ])
         return this.contract.cook(
-            [ACTION_BORROW, ACTION_BENTO_TRANSFER, ACTION_CALL, ACTION_ADD_COLLATERAL],
+            [ACTION_BORROW, ACTION_ANTIQUE_TRANSFER, ACTION_CALL, ACTION_ADD_COLLATERAL],
             [0, 0, 0, 0, 0],
             [
                 defaultAbiCoder.encode(["int256", "address"], [amount, addr(this.contract.signer)]),
@@ -429,7 +429,7 @@ class KashiPair {
     }
 }
 
-Object.defineProperty(KashiPair.prototype, "cmd", {
+Object.defineProperty(KushoPair.prototype, "cmd", {
     get: function () {
         function proxy(pair, as) {
             return new Proxy(pair, {
@@ -437,7 +437,7 @@ Object.defineProperty(KashiPair.prototype, "cmd", {
                     return function (...params) {
                         if (method == "do") {
                             return {
-                                type: "KashiPairDo",
+                                type: "KushoPairDo",
                                 method: params[0],
                                 params: params.slice(1),
                             }
@@ -446,7 +446,7 @@ Object.defineProperty(KashiPair.prototype, "cmd", {
                             return proxy(pair, params[0])
                         }
                         return {
-                            type: "KashiPairCmd",
+                            type: "KushoPairCmd",
                             pair: target,
                             method: method,
                             params: params,
@@ -461,17 +461,17 @@ Object.defineProperty(KashiPair.prototype, "cmd", {
     },
 })
 
-KashiPair.deploy = async function (bentoBox, masterContract, masterContractClass, asset, collateral, oracle, oracleData) {
+KushoPair.deploy = async function (antiqueBox, masterContract, masterContractClass, asset, collateral, oracle, oracleData) {
     const initData = defaultAbiCoder.encode(["address", "address", "address", "bytes"], [addr(asset), addr(collateral), addr(oracle), oracleData])
-    const deployTx = await bentoBox.deploy(masterContract.address, initData, true)
+    const deployTx = await antiqueBox.deploy(masterContract.address, initData, true)
     const pair = await masterContractClass.attach((await deployTx.wait()).events[0].args.cloneAddress)
     await pair.updateExchangeRate()
-    const pairHelper = new KashiPair(pair)
+    const pairHelper = new KushoPair(pair)
     pairHelper.initData = initData
-    await pairHelper.init(bentoBox)
+    await pairHelper.init(antiqueBox)
     return pairHelper
 }
 
 module.exports = {
-    KashiPair,
+    KushoPair,
 }

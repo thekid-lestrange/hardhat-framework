@@ -6,12 +6,12 @@ const {
 } = require("ethers")
 const { ecsign } = require("ethereumjs-util")
 const { BN } = require("bn.js")
-const { KashiPair } = require("./kashipair")
+const { KushoPair } = require("./kushopair")
 
 const ADDRESS_ZERO = "0x0000000000000000000000000000000000000000"
 const BASE_TEN = 10
 const PERMIT_TYPEHASH = keccak256(toUtf8Bytes("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"))
-const BENTOBOX_MASTER_APPROVAL_TYPEHASH = keccak256(
+const ANTIQUEBOX_MASTER_APPROVAL_TYPEHASH = keccak256(
     toUtf8Bytes("SetMasterContractApproval(string warning,address user,address masterContract,bool approved,uint256 nonce)")
 )
 
@@ -54,22 +54,22 @@ function getApprovalMsg(tokenAddress, approve, nonce, deadline) {
     return pack
 }
 
-function getBentoBoxDomainSeparator(address, chainId) {
+function getAntiqueBoxDomainSeparator(address, chainId) {
     return keccak256(
         defaultAbiCoder.encode(
             ["bytes32", "bytes32", "uint256", "address"],
-            [keccak256(toUtf8Bytes("EIP712Domain(string name,uint256 chainId,address verifyingContract)")), keccak256(toUtf8Bytes("BentoBox V1")), chainId, address]
+            [keccak256(toUtf8Bytes("EIP712Domain(string name,uint256 chainId,address verifyingContract)")), keccak256(toUtf8Bytes("AntiqueBox V1")), chainId, address]
         )
     )
 }
 
-function getBentoBoxApprovalDigest(bentoBox, user, masterContractAddress, approved, nonce, chainId = 1) {
-    const DOMAIN_SEPARATOR = getBentoBoxDomainSeparator(bentoBox.address, chainId)
+function getAntiqueBoxApprovalDigest(antiqueBox, user, masterContractAddress, approved, nonce, chainId = 1) {
+    const DOMAIN_SEPARATOR = getAntiqueBoxDomainSeparator(antiqueBox.address, chainId)
     const msg = defaultAbiCoder.encode(
         ["bytes32", "bytes32", "address", "address", "bool", "uint256"],
         [
-            BENTOBOX_MASTER_APPROVAL_TYPEHASH,
-            keccak256(toUtf8Bytes(approved ? "Give FULL access to funds in (and approved to) BentoBox?" : "Revoke access to BentoBox?")),
+            ANTIQUEBOX_MASTER_APPROVAL_TYPEHASH,
+            keccak256(toUtf8Bytes(approved ? "Give FULL access to funds in (and approved to) AntiqueBox?" : "Revoke access to AntiqueBox?")),
             user.address,
             masterContractAddress,
             approved,
@@ -80,22 +80,22 @@ function getBentoBoxApprovalDigest(bentoBox, user, masterContractAddress, approv
     return keccak256(pack)
 }
 
-function getSignedMasterContractApprovalData(bentoBox, user, privateKey, masterContractAddress, approved, nonce) {
-    const digest = getBentoBoxApprovalDigest(bentoBox, user, masterContractAddress, approved, nonce, user.provider._network.chainId)
+function getSignedMasterContractApprovalData(antiqueBox, user, privateKey, masterContractAddress, approved, nonce) {
+    const digest = getAntiqueBoxApprovalDigest(antiqueBox, user, masterContractAddress, approved, nonce, user.provider._network.chainId)
     const { v, r, s } = ecsign(Buffer.from(digest.slice(2), "hex"), Buffer.from(privateKey.replace("0x", ""), "hex"))
     return { v, r, s }
 }
 
-async function setMasterContractApproval(bentoBox, from, user, privateKey, masterContractAddress, approved, fallback) {
+async function setMasterContractApproval(antiqueBox, from, user, privateKey, masterContractAddress, approved, fallback) {
     if (!fallback) {
-        const nonce = await bentoBox.nonces(user.address)
+        const nonce = await antiqueBox.nonces(user.address)
 
-        const digest = getBentoBoxApprovalDigest(bentoBox, user, masterContractAddress, approved, nonce, user.provider._network.chainId)
+        const digest = getAntiqueBoxApprovalDigest(antiqueBox, user, masterContractAddress, approved, nonce, user.provider._network.chainId)
         const { v, r, s } = ecsign(Buffer.from(digest.slice(2), "hex"), Buffer.from(privateKey.replace("0x", ""), "hex"))
 
-        return await bentoBox.connect(user).setMasterContractApproval(from.address, masterContractAddress, approved, v, r, s)
+        return await antiqueBox.connect(user).setMasterContractApproval(from.address, masterContractAddress, approved, v, r, s)
     }
-    return await bentoBox
+    return await antiqueBox
         .connect(user)
         .setMasterContractApproval(
             from.address,
@@ -107,16 +107,16 @@ async function setMasterContractApproval(bentoBox, from, user, privateKey, maste
         )
 }
 
-async function setKashiPairContractApproval(bentoBox, user, privateKey, kashiPair, approved) {
-    const nonce = await bentoBox.nonces(user.address)
+async function setKushoPairContractApproval(antiqueBox, user, privateKey, kushoPair, approved) {
+    const nonce = await antiqueBox.nonces(user.address)
 
-    const digest = getBentoBoxApprovalDigest(bentoBox, user, kashiPair.address, approved, nonce, user.provider._network.chainId)
+    const digest = getAntiqueBoxApprovalDigest(antiqueBox, user, kushoPair.address, approved, nonce, user.provider._network.chainId)
     const { v, r, s } = ecsign(Buffer.from(digest.slice(2), "hex"), Buffer.from(privateKey.replace("0x", ""), "hex"))
 
-    return await kashiPair.connect(user).setApproval(user.address, approved, v, r, s)
+    return await kushoPair.connect(user).setApproval(user.address, approved, v, r, s)
 }
 
-async function kashiPairPermit(bentoBox, token, user, privateKey, kashiPair, amount) {
+async function kushoPairPermit(antiqueBox, token, user, privateKey, kushoPair, amount) {
     const nonce = await token.nonces(user.address)
 
     const deadline = (await user.provider._internalBlockNumber).respTime + 10000
@@ -125,7 +125,7 @@ async function kashiPairPermit(bentoBox, token, user, privateKey, kashiPair, amo
         token,
         {
             owner: user.address,
-            spender: bentoBox.address,
+            spender: antiqueBox.address,
             value: amount,
         },
         nonce,
@@ -134,7 +134,7 @@ async function kashiPairPermit(bentoBox, token, user, privateKey, kashiPair, amo
     )
     const { v, r, s } = ecsign(Buffer.from(digest.slice(2), "hex"), Buffer.from(privateKey.replace("0x", ""), "hex"))
 
-    return await kashiPair.connect(user).permitToken(token.address, user.address, bentoBox.address, amount, deadline, v, r, s)
+    return await kushoPair.connect(user).permitToken(token.address, user.address, antiqueBox.address, amount, deadline, v, r, s)
 }
 
 function sansBorrowFee(amount) {
@@ -326,24 +326,24 @@ async function createFixture(deployments, thisObject, stepsFunction) {
             addPair: async function (var_name, tokenA, tokenB, amountA, amountB) {
                 const createPairTx = await thisObject.factory.createPair(addr(tokenA), addr(tokenB))
                 const pair = (await createPairTx.wait()).events[0].args.pair
-                const SushiSwapPairMock = await ethers.getContractFactory("SushiSwapPairMock")
-                const sushiSwapPair = await SushiSwapPairMock.attach(pair)
-                addContract(thisObject, var_name, sushiSwapPair)
+                const PolyCityDexPairMock = await ethers.getContractFactory("PolyCityDexPairMock")
+                const polyCityDexPair = await PolyCityDexPairMock.attach(pair)
+                addContract(thisObject, var_name, polyCityDexPair)
 
-                await tokenA.transfer(sushiSwapPair.address, getBigNumber(amountA, await tokenA.decimals()))
-                await tokenB.transfer(sushiSwapPair.address, getBigNumber(amountB, await tokenB.decimals()))
+                await tokenA.transfer(polyCityDexPair.address, getBigNumber(amountA, await tokenA.decimals()))
+                await tokenB.transfer(polyCityDexPair.address, getBigNumber(amountB, await tokenB.decimals()))
 
-                await sushiSwapPair.mint(thisObject.alice.address)
-                return sushiSwapPair
+                await polyCityDexPair.mint(thisObject.alice.address)
+                return polyCityDexPair
             },
-            addKashiPair: async function (var_name, bentoBox, masterContract, asset, collateral, oracle, oracleData) {
-                const helper = await KashiPair.deploy(bentoBox, masterContract, masterContract.factory, asset, collateral, oracle, oracleData)
+            addKushoPair: async function (var_name, antiqueBox, masterContract, asset, collateral, oracle, oracleData) {
+                const helper = await KushoPair.deploy(antiqueBox, masterContract, masterContract.factory, asset, collateral, oracle, oracleData)
                 addContract(thisObject, var_name, helper)
                 return helper
             },
         }
 
-        await deployFunction("factory", "SushiSwapFactoryMock")
+        await deployFunction("factory", "PolyCityDexFactoryMock")
 
         await stepsFunction(cmd)
         return cmd
@@ -399,12 +399,12 @@ module.exports = {
     getDomainSeparator,
     getApprovalDigest,
     getApprovalMsg,
-    getBentoBoxDomainSeparator,
-    getBentoBoxApprovalDigest,
-    kashiPairPermit,
+    getAntiqueBoxDomainSeparator,
+    getAntiqueBoxApprovalDigest,
+    kushoPairPermit,
     getSignedMasterContractApprovalData,
     setMasterContractApproval,
-    setKashiPairContractApproval,
+    setKushoPairContractApproval,
     sansBorrowFee,
     sansSafetyAmount,
     encodePrice,

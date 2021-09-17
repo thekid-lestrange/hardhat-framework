@@ -50,10 +50,9 @@ function hardhat(userSettings) {
         accountsBalance: "990000000000000000000",
     }
 
-    const accounts =
-        process.env.MNEMONIC && process.env.FUNDER_MNEMONIC
-            ? [ethers.Wallet.fromMnemonic(process.env.MNEMONIC).privateKey, ethers.Wallet.fromMnemonic(process.env.FUNDER_MNEMONIC).privateKey]
-            : []
+    const accounts = {
+        mnemonic: process.env.MNEMONIC || "test test test test test test test test test test test junk",
+    }
 
     let networks = {
         hardhat: Object.assign(
